@@ -1,0 +1,25 @@
+{
+  "name": "双色球大乐透分析",
+  "short_name": "彩票分析",
+  "description": "双色球 / 大乐透 历史数据分析与号码参考",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#141a28",
+  "theme_color": "#141a28",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

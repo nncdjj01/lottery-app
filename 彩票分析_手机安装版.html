@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#141a28">
+<link rel="manifest" href="/manifest.json">
+<link rel="icon" href="/icon.png">
+<title>彩票分析助手</title>
+<style>
+:root{--bg:#0e1220;--card:#151b2e;--card2:#1c2440;--line:#2a3352;--txt:#e8edf5;--sub:#9aa7bd;
+  --red:#ef4444;--blue:#3b82f6;--gold:#eab308;--sec:#22c55e;--ac:#e11d48;--violet:#8b5cf6;}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:system-ui,-apple-system,"PingFang SC","Microsoft YaHei",sans-serif;font-size:14px;padding-bottom:24px}
+header{position:sticky;top:0;z-index:10;background:linear-gradient(180deg,#141a28,#0e1220);padding:14px 14px 10px;border-bottom:1px solid var(--line)}
+header .title{font-size:17px;font-weight:800;letter-spacing:.5px}
+header .sub{color:var(--sub);font-size:11px;margin-top:3px}
+.tabs{display:flex;gap:8px;margin-top:10px}
+.tab{flex:1;text-align:center;padding:9px 0;border-radius:14px;background:var(--card2);border:1px solid var(--line);font-weight:700;cursor:pointer;color:var(--sub);font-size:13px}
+.tab.on{background:var(--red);color:#fff;border-color:var(--red)}
+.btn{display:block;width:100%;margin-top:10px;padding:11px;border-radius:14px;border:none;background:var(--card2);color:var(--txt);font-weight:700;font-size:14px;cursor:pointer}
+.btn:active{opacity:.75}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;margin:12px 12px 0;padding:14px}
+.card h3{font-size:14px;margin:0 0 10px;display:flex;align-items:center;gap:6px}
+.tag{font-size:10px;color:var(--sub);font-weight:500}
+.balls{display:flex;flex-wrap:wrap;gap:7px;margin:6px 0}
+.ball{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;color:#fff;background:radial-gradient(circle at 30% 30%,#ff6b6b,#d32f2f)}
+.ball.sm{width:30px;height:30px;font-size:12px}
+.ball.blue{background:radial-gradient(circle at 30% 30%,#64b5f6,#1565c0)}
+.ball.gold{background:radial-gradient(circle at 30% 30%,#ffe082,#b8860b)}
+.ball.sec{background:radial-gradient(circle at 30% 30%,#81c784,#2e7d32)}
+.metric-row{display:flex;gap:8px;flex-wrap:wrap}
+.metric{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:8px 10px;min-width:0}
+.metric .k{color:var(--sub);font-size:11px}
+.metric .v{font-weight:800;font-size:15px;display:block;margin-top:2px;word-break:break-all}
+.combo{background:var(--card2);border:1px solid var(--line);border-radius:12px;padding:9px 10px;margin:6px 0}
+.combo .line{font-size:11px;color:var(--sub);margin-top:4px}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th,td{padding:5px 6px;text-align:center;border-bottom:1px solid var(--line)}
+th{color:var(--sub);font-weight:600}
+td.num{font-weight:800}
+.hot,.cold{display:inline-block;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700}
+.hot{background:#7f1d1d;color:#fecaca}.cold{background:#1e3a8a;color:#bfdbfe}
+canvas{width:100%;height:150px;display:block}
+.note{font-size:11px;color:var(--sub);padding:0 14px;margin-top:8px;line-height:1.5}
+.err{background:var(--card);border:1px solid #7f1d1d;color:#fecaca;border-radius:12px;padding:14px;margin:12px;font-size:12px;line-height:1.6}
+.loading{text-align:center;color:var(--sub);padding:40px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="title">🎱 彩票分析助手</div>
+  <div class="sub">双色球 / 大乐透 · 历史数据分析 · 随时可查</div>
+  <div class="tabs">
+    <div class="tab on" id="tab_ssq">双色球</div>
+    <div class="tab" id="tab_dlt">大乐透</div>
+  </div>
+  <button class="btn" id="refresh">↻ 刷新数据</button>
+</header>
+<div id="view"><div class="loading">加载中…</div></div>
+<div class="note">⚠️ 郑重声明：彩票开奖为独立随机事件，任何历史分析均无法保证命中。本工具仅做统计规律展示与研究参考，请理性购彩、量力而行。</div>
+
+<script>
+const VIEW=document.getElementById('view');
+const RED='red',GOLD='gold',BLUE='blue',SEC='sec';
+let GAME='ssq';
+
+function ballHtml(n,cls,sm){return `<span class="ball ${cls} ${sm?'sm':''}">${String(n).padStart(2,'0')}</span>`;}
+
+async function load(g){
+  GAME=g;
+  document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.id==='tab_'+g));
+  VIEW.innerHTML='<div class="loading">加载中…</div>';
+  try{
+    const r=await fetch('/api/analysis?game='+g);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const d=await r.json();
+    render(d);
+  }catch(e){
+    VIEW.innerHTML=`<div class="err">⚠️ 加载失败：${e.message}<br><br>请检查网络后点击「刷新数据」重试。</div>`;
+  }
+}
+
+function render(d){
+  const isSsq=d.game==='双色球';
+  const P=d.prediction, A=d.analysis, S=d.stats, L=d.latest;
+  const mainPool=isSsq?33:35, subPool=isSsq?16:12;
+  const mainCls=isSsq?RED:GOLD, subCls=isSsq?BLUE:SEC;
+  const mainKey=isSsq?'red':'front', subKey=isSsq?'blue':'back';
+  const topKey=isSsq?'red_score_top':'front_score_top';
+  const subTopKey=isSsq?'blue_score_top':'back_score_top';
+  const hotKey=isSsq?'hot_red':'hot_front', coldKey=isSsq?'cold_red':'cold_front';
+  const omMain=A.omission[mainKey], fqMain=A.freq[mainKey], rotMain=A.rotation[mainKey];
+  const clsMain=A.freq[isSsq?'red_class':'front_class'];
+
+  let h='';
+  // 最新开奖
+  h+=`<div class="card"><h3>📅 最新开奖 <span class="tag">共分析 ${d.count} 期</span></h3>`;
+  if(isSsq){ h+=`<div class="metric-row"><div class="metric"><span class="k">期号</span><span class="v">${L.issue}</span></div><div class="metric"><span class="k">日期</span><span class="v">${L.date} ${L.week||''}</span></div></div>
+    <div class="balls">${L.red.map(n=>ballHtml(n,RED)).join('')}${ballHtml(L.blue,BLUE)}</div>`;
+  }else{
+    h+=`<div class="metric-row"><div class="metric"><span class="k">期号</span><span class="v">${L.issue}</span></div><div class="metric"><span class="k">日期</span><span class="v">${L.date}</span></div></div>
+    <div class="balls">${L.fronts.map(n=>ballHtml(n,GOLD)).join('')}<span style="color:var(--sub)">|</span>${L.backs.map(n=>ballHtml(n,SEC)).join('')}</div>`;
+  }
+  h+=`</div>`;
+
+  // 下期参考
+  h+=`<div class="card"><h3>📊 下期参考号码 <span class="tag">遗漏50%·频次30%·轮动20%</span></h3>`;
+  h+=`<div class="metric-row"><div class="metric"><span class="k">${isSsq?'红球':'前区'}综合高分</span><span class="v">${P[topKey].join(' ')}</span></div>
+       <div class="metric"><span class="k">${isSsq?'蓝球':'后区'}参考</span><span class="v">${P[subTopKey].join(' ')}</span></div></div>`;
+  h+=`<div style="margin-top:10px"><b style="font-size:13px">🎯 推荐组合</b></div>`;
+  (P.combos||[]).forEach(c=>{
+    h+=`<div class="combo"><div class="balls">${c.nums.map(n=>ballHtml(n,mainCls,1)).join('')}</div>
+      <div class="line">和值 ${c.sum} · 跨度 ${c.span} · 奇偶 ${c.odd_even} · 分区 ${c.zone} · AC ${c.ac} · 质合 ${c.prime_str} · 评分 ${c.score}</div></div>`;
+  });
+  if(!isSsq&&P.back_combos){
+    h+=`<div class="metric-row" style="margin-top:8px"><div class="metric"><span class="k">后区组合</span><span class="v">${P.back_combos.map(b=>b.nums.join(' ')).join(' ｜ ')}</span></div></div>`;
+  }
+  h+=`</div>`;
+
+  // 热冷号
+  h+=`<div class="card"><h3>🔥 热冷号 <span class="tag">近50期频次</span></h3>`;
+  h+=`<div class="metric"><span class="k">热号</span><span class="v">${A[hotKey]&&A[hotKey].length?A[hotKey].join(' '):'—'}</span></div>`;
+  h+=`<div style="height:8px"></div>`;
+  h+=`<div class="metric"><span class="k">冷号</span><span class="v">${A[coldKey]&&A[coldKey].length?A[coldKey].join(' '):'—'}</span></div>`;
+  h+=`</div>`;
+
+  // 关键统计
+  h+=`<div class="card"><h3>📈 关键统计 <span class="tag">近80期</span></h3>
+    <div class="metric-row">
+      <div class="metric"><span class="k">和值均值</span><span class="v">${S.sum.mean}</span></div>
+      <div class="metric"><span class="k">和值中心</span><span class="v">${S.sum.center}</span></div>
+      <div class="metric"><span class="k">跨度均值</span><span class="v">${S.span.mean}</span></div>
+      <div class="metric"><span class="k">AC均值</span><span class="v">${S.ac.mean}</span></div>
+    </div>
+    <div style="margin-top:8px"><b style="font-size:12px">和值走势（近30期）</b></div>
+    <canvas id="chSum"></canvas>
+    <div style="margin-top:8px"><b style="font-size:12px">012路分布（近30期）</b></div>
+    <canvas id="chMod3"></canvas>
+    <div style="margin-top:8px"><b style="font-size:12px">质合比 / 奇偶比（近30期）</b></div>
+    <canvas id="chPQ"></canvas>
+    <div style="margin-top:8px"><b style="font-size:12px">大小比（近30期）</b></div>
+    <canvas id="chBS"></canvas>
+    </div>`;
+
+  // 号码分析总表
+  h+=`<div class="card"><h3>🧮 号码分析总表</h3><div style="overflow:auto">
+    <table><thead><tr><th>号码</th><th>遗漏</th><th>频次</th><th>轮动%</th><th>分类</th></tr></thead><tbody>`;
+  for(let n=1;n<=mainPool;n++){
+    const cls=clsMain[n]||'温';
+    const clsBadge=cls==='热'?'<span class="hot">热</span>':(cls==='冷'?'<span class="cold">冷</span>':'<span style="color:var(--sub)">温</span>');
+    h+=`<tr><td class="num">${String(n).padStart(2,'0')}</td><td>${omMain[n]}</td><td>${fqMain[n]}</td><td>${(rotMain[n]*100).toFixed(1)}</td><td>${clsBadge}</td></tr>`;
+  }
+  h+=`</tbody></table></div></div>`;
+  VIEW.innerHTML=h;
+  drawSum(S.sum.list.slice(-30));
+  drawMod3(S.mod3.list.slice(-30));
+  drawPQ(S.prime.list.slice(-30));
+  drawBS(S.bigsmall.list.slice(-30));
+}
+
+// ---- 简单 Canvas 图表 ----
+function lin(c,vals,color,fill){
+  const w=c.width=Math.max(c.clientWidth||280,240), h=c.height=180;
+  const g=c.getContext('2d');g.clearRect(0,0,w,h);
+  const mx=Math.max(...vals),mn=Math.min(...vals),rg=(mx-mn)||1;
+  const px=v=>20+(w-40)*(v-mn)/rg, py=i=>h-20-(h-40)*(i/(vals.length-1||1));
+  g.strokeStyle='#2a3352';g.beginPath();g.moveTo(20,h-20);g.lineTo(w-20,h-20);g.stroke();
+  g.strokeStyle=color;g.lineWidth=2;g.beginPath();
+  vals.forEach((v,i)=>{const x=px(v),y=py(i);i===0?g.moveTo(x,y):g.lineTo(x,y);});g.stroke();
+  if(fill){g.lineTo(w-20,h-20);g.lineTo(20,h-20);g.closePath();g.globalAlpha=.15;g.fillStyle=color;g.fill();g.globalAlpha=1;}
+  g.fillStyle='#9aa7bd';g.fillText(mx,4,16);g.fillText(mn,4,h-6);
+}
+function bars(c,rows,colors,labels){
+  const w=c.width=Math.max(c.clientWidth||280,240), h=c.height=180;
+  const g=c.getContext('2d');g.clearRect(0,0,w,h);
+  const n=rows.length;const bw=Math.min((w-40)/n-2,10);
+  const maxH=Math.max(...rows.map(r=>r.reduce((a,b)=>a+b,0)),1);
+  const offset=w-40-(bw+2)*n;
+  rows.forEach((row,i)=>{
+    const x=20+offset/2+i*(bw+2);let y=h-20;
+    row.forEach((v,ci)=>{
+      const bh=h*(v/maxH);
+      g.fillStyle=colors[ci];g.fillRect(x,y-bh,bw,bh);y-=bh;
+    });
+  });
+  g.fillStyle='#9aa7bd';g.font='10px sans-serif';
+  if(labels) labels.forEach((lb,ci)=>{g.fillStyle=colors[ci];g.fillRect(w-70,12+ci*14,8,8);g.fillStyle='#9aa7bd';g.fillText(lb,w-56,20+ci*14);});
+}
+function drawSum(list){lin(document.getElementById('chSum'),list,'#eab308',true);}
+function drawMod3(list){bars(document.getElementById('chMod3'),list,['#3b82f6','#22c55e','#ef4444'],['0路','1路','2路']);}
+function drawPQ(list){bars(document.getElementById('chPQ'),list,['#e11d48','#8b5cf6'],['质数','合数']);}
+function drawBS(list){bars(document.getElementById('chBS'),list,['#3b82f6','#eab308'],['小数','大数']);}
+
+document.getElementById('tab_ssq').addEventListener('click',()=>load('ssq'));
+document.getElementById('tab_dlt').addEventListener('click',()=>load('dlt'));
+document.getElementById('refresh').addEventListener('click',()=>load(GAME));
+load('ssq');
+</script>
+</body>
+</html>
